@@ -15,12 +15,12 @@ import kotlinx.coroutines.delay
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreatePlanScreen(
-    onPlanCreated: () -> Unit,
+    onPlanCreated: (String, String) -> Unit,
     onBack: () -> Unit,
     viewModel: PlanViewModel
 ) {
     var planName by remember { mutableStateOf("") }
-    var goalAmount by remember { mutableStateOf("") }
+    var targetAmount by remember { mutableStateOf("") }
     var months by remember { mutableStateOf("12") }
     var isLoading by remember { mutableStateOf(false) }
     var showSuccess by remember { mutableStateOf(false) }
@@ -41,14 +41,16 @@ fun CreatePlanScreen(
                 showSuccess = true
                 errorMessage = null
 
+                val createdPlan = (createPlanState as ApiResponse.Success<com.example.parcial2_componentes.data.model.Plan>).data
+
                 // Limpiar campos después de éxito
+                delay(2000)
                 planName = ""
-                goalAmount = ""
+                targetAmount = ""
                 months = "12"
 
-                // Navegar después de 2 segundos
-                delay(2000)
-                onPlanCreated()
+                // Llamar callback con ID y nombre del plan creado
+                onPlanCreated(createdPlan._id ?: "", createdPlan.name)
                 viewModel.clearCreatePlanState()
                 showSuccess = false
             }
@@ -144,11 +146,11 @@ fun CreatePlanScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             OutlinedTextField(
-                value = goalAmount,
+                value = targetAmount,
                 onValueChange = {
                     // Permitir solo números y punto decimal
                     if (it.isEmpty() || it.matches(Regex("^\\d*\\.?\\d*\$"))) {
-                        goalAmount = it
+                        targetAmount = it
                         errorMessage = null
                     }
                 },
@@ -190,15 +192,15 @@ fun CreatePlanScreen(
             Button(
                 onClick = {
                     // Validaciones
-                    if (planName.isBlank() || goalAmount.isBlank() || months.isBlank()) {
+                    if (planName.isBlank() || targetAmount.isBlank() || months.isBlank()) {
                         errorMessage = "Por favor completa todos los campos obligatorios"
                         return@Button
                     }
 
-                    val goal = goalAmount.toDoubleOrNull()
+                    val target = targetAmount.toDoubleOrNull()
                     val monthsValue = months.toIntOrNull()
 
-                    if (goal == null || goal <= 0) {
+                    if (target == null || target <= 0) {
                         errorMessage = "La meta debe ser un número válido mayor a 0"
                         return@Button
                     }
@@ -213,7 +215,7 @@ fun CreatePlanScreen(
                         return@Button
                     }
 
-                    viewModel.createPlan(planName, goal, monthsValue)
+                    viewModel.createPlan(planName, target, monthsValue)
                 },
                 modifier = Modifier
                     .fillMaxWidth()

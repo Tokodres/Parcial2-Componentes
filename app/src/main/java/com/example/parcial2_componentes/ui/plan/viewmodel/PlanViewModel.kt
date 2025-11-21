@@ -30,15 +30,15 @@ class PlanViewModel(private val repository: FamilySavingsRepository) : ViewModel
         }
     }
 
-    fun createPlan(name: String, goal: Double, months: Int = 12) {
+    fun createPlan(name: String, targetAmount: Double, months: Int) {
         viewModelScope.launch {
             _createPlanState.value = ApiResponse.Loading
 
             val planRequest = CreatePlanRequest(
                 name = name,
-                targetAmount = goal,
+                targetAmount = targetAmount,
                 motive = "Ahorro familiar",
-                months = months // ✅ Incluir el campo requerido
+                months = months
             )
 
             _createPlanState.value = repository.createPlan(planRequest)

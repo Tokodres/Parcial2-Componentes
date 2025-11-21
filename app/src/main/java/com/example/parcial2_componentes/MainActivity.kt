@@ -15,6 +15,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.parcial2_componentes.data.model.Plan
 import com.example.parcial2_componentes.data.remote.ApiResponse
+import com.example.parcial2_componentes.ui.member.AddMemberScreen
+import com.example.parcial2_componentes.ui.member.viewmodel.MemberViewModel
+import com.example.parcial2_componentes.ui.member.viewmodel.MemberViewModelFactory
+import com.example.parcial2_componentes.ui.plan.CreatePlanScreen
 import com.example.parcial2_componentes.ui.plan.viewmodel.PlanViewModel
 import com.example.parcial2_componentes.ui.plan.viewmodel.PlanViewModelFactory
 import kotlinx.coroutines.delay
@@ -30,11 +34,11 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     val app = application as FamilySavingsApp
-                    val viewModel: PlanViewModel = viewModel(
+                    val planViewModel: PlanViewModel = viewModel(
                         factory = PlanViewModelFactory(app.repository)
                     )
 
-                    AppNavigation(viewModel = viewModel)
+                    AppNavigation(planViewModel = planViewModel, app = app)
                 }
             }
         }
@@ -42,22 +46,42 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun AppNavigation(viewModel: PlanViewModel) {
+fun AppNavigation(planViewModel: PlanViewModel, app: FamilySavingsApp) {
     var currentScreen by remember { mutableStateOf("plan_list") }
+    var createdPlanId by remember { mutableStateOf<String?>(null) }
+    var createdPlanName by remember { mutableStateOf<String?>(null) }
 
     when (currentScreen) {
         "plan_list" -> PlanListScreen(
-            viewModel = viewModel,
+            viewModel = planViewModel,
             onCreateNewPlan = { currentScreen = "create_plan" }
         )
         "create_plan" -> CreatePlanScreen(
-            onPlanCreated = {
-                currentScreen = "plan_list"
-                viewModel.loadPlans() // Recargar la lista
+            onPlanCreated = { planId, planName ->
+                createdPlanId = planId
+                createdPlanName = planName
+                currentScreen = "add_members"
             },
             onBack = { currentScreen = "plan_list" },
-            viewModel = viewModel
+            viewModel = planViewModel
         )
+        "add_members" -> {
+            val planId = createdPlanId ?: ""
+            val planName = createdPlanName ?: "Plan"
+            val memberViewModel: MemberViewModel = viewModel(
+                factory = MemberViewModelFactory(app.repository)
+            )
+            AddMemberScreen(
+                planId = planId,
+                planName = planName,
+                onMembersAdded = {
+                    currentScreen = "plan_list"
+                    planViewModel.loadPlans() // Recargar la lista
+                },
+                onBack = { currentScreen = "plan_list" },
+                viewModel = memberViewModel
+            )
+        }
     }
 }
 
@@ -68,6 +92,11 @@ fun PlanListScreen(
     onCreateNewPlan: () -> Unit
 ) {
     val plansState by viewModel.plansState.collectAsStateWithLifecycle()
+
+    // Recargar planes al entrar a la pantalla
+    LaunchedEffect(Unit) {
+        viewModel.loadPlans()
+    }
 
     Column(
         modifier = Modifier
@@ -99,11 +128,22 @@ fun PlanListScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator()
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator()
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Cargando planes...")
+                    }
                 }
             }
             is ApiResponse.Success -> {
                 val plans = (plansState as ApiResponse.Success<List<Plan>>).data
+
+                Text(
+                    "Total de planes: ${plans.size}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
 
                 if (plans.isEmpty()) {
                     Box(
@@ -111,15 +151,18 @@ fun PlanListScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("No hay planes creados")
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Button(onClick = onCreateNewPlan) {
-                                Text("Crear primer plan")
-                            }
+                            Text(
+                                "No hay planes creados",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                "Presiona 'Nuevo Plan' para crear el primero",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
                         }
                     }
                 } else {
-                    // Mostrar lista de planes - CORREGIDO
                     LazyColumn {
                         items(plans) { plan ->
                             PlanItemCard(plan = plan)
@@ -133,9 +176,15 @@ fun PlanListScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("❌ Error al cargar planes")
+                        Text(
+                            "❌ Error al cargar planes",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text((plansState as ApiResponse.Error).message)
+                        Text(
+                            (plansState as ApiResponse.Error).message,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(onClick = { viewModel.loadPlans() }) {
                             Text("Reintentar")
@@ -147,178 +196,56 @@ fun PlanListScreen(
     }
 }
 
-// Componente separado para mostrar un plan - CORREGIDO
+// Componente para mostrar un plan (sin botón de eliminar)
 @Composable
 fun PlanItemCard(plan: Plan) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(8.dp)
+            .padding(vertical = 8.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(plan.name, style = MaterialTheme.typography.headlineSmall)
-            Text("Meta: $${plan.goal}")
-            Text("Recolectado: $${plan.totalCollected}")
-        }
-    }
-}
-
-// Pantalla para crear planes
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun CreatePlanScreen(
-    onPlanCreated: () -> Unit,
-    onBack: () -> Unit,
-    viewModel: PlanViewModel
-) {
-    var planName by remember { mutableStateOf("") }
-    var goalAmount by remember { mutableStateOf("") }
-    var isLoading by remember { mutableStateOf(false) }
-    var showSuccess by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-
-    val createPlanState by viewModel.createPlanState.collectAsStateWithLifecycle()
-
-    // Manejar el estado de la creación del plan
-    LaunchedEffect(createPlanState) {
-        when (createPlanState) {
-            is ApiResponse.Loading -> {
-                isLoading = true
-                showSuccess = false
-                errorMessage = null
-            }
-            is ApiResponse.Success<*> -> {
-                isLoading = false
-                showSuccess = true
-                errorMessage = null
-
-                // Limpiar campos y navegar después de 2 segundos
-                delay(2000)
-                planName = ""
-                goalAmount = ""
-                onPlanCreated()
-                viewModel.clearCreatePlanState()
-                showSuccess = false
-            }
-            is ApiResponse.Error -> {
-                isLoading = false
-                showSuccess = false
-                errorMessage = (createPlanState as ApiResponse.Error).message
-                viewModel.clearCreatePlanState()
-            }
-            else -> {}
-        }
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        // Header
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Button(onClick = onBack) {
-                Text("← Volver")
-            }
-            Spacer(modifier = Modifier.width(16.dp))
             Text(
-                "Crear Plan Familiar",
-                style = MaterialTheme.typography.headlineMedium
+                plan.name,
+                style = MaterialTheme.typography.headlineSmall
             )
-        }
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        // Mostrar mensaje de éxito
-        if (showSuccess) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("✅ Plan creado exitosamente!")
-                }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("Meta: $${plan.targetAmount}")
+            Text("Recolectado: $${plan.totalCollected}")
+            Text("Miembros: ${plan.members?.size ?: 0}")
+            Text("Duración: ${plan.months} meses")
+            plan.createdAt?.let {
+                Text("Creado: ${it.substring(0, 10)}")
             }
-        }
 
-        // Mostrar mensaje de error
-        errorMessage?.let { message ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("❌ $message")
-                }
+            // Mostrar nombres de los miembros si existen
+            plan.members?.takeIf { it.isNotEmpty() }?.let { members ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "Miembros: ${members.joinToString { it.name }}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-        }
 
-        OutlinedTextField(
-            value = planName,
-            onValueChange = {
-                planName = it
-                errorMessage = null
-            },
-            label = { Text("Nombre del Plan") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        OutlinedTextField(
-            value = goalAmount,
-            onValueChange = {
-                goalAmount = it
-                errorMessage = null
-            },
-            label = { Text("Meta de Ahorro") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        Button(
-            onClick = {
-                if (planName.isBlank() || goalAmount.isBlank()) {
-                    errorMessage = "Por favor completa todos los campos"
-                    return@Button
-                }
-
-                val goal = goalAmount.toDoubleOrNull()
-                if (goal == null || goal <= 0) {
-                    errorMessage = "La meta debe ser un número válido mayor a 0"
-                    return@Button
-                }
-
-                viewModel.createPlan(planName, goal)
-            },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !isLoading
-        ) {
-            if (isLoading) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Creando...")
-                }
+            // Progress bar
+            val progress = if (plan.targetAmount > 0) {
+                (plan.totalCollected / plan.targetAmount).toFloat().coerceIn(0f, 1f)
             } else {
-                Text("Crear Plan")
+                0f
             }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            LinearProgressIndicator(
+                progress = progress,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Text(
+                "${(progress * 100).toInt()}% completado",
+                style = MaterialTheme.typography.bodySmall
+            )
         }
     }
 }

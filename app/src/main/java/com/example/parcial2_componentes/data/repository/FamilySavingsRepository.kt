@@ -9,83 +9,96 @@ class FamilySavingsRepository(private val apiService: ApiService) {
 
     suspend fun createPlan(plan: CreatePlanRequest): ApiResponse<Plan> {
         return try {
-            println("🟡 ENVIANDO AL BACKEND: $plan")
+            println("🟡 [REPOSITORY] Enviando plan al backend: $plan")
             val response = apiService.createPlan(plan)
-            println("🟡 RESPUESTA BACKEND - Código: ${response.code()}")
+            println("🟡 [REPOSITORY] Respuesta - Código: ${response.code()}")
 
             if (response.isSuccessful && response.body() != null) {
-                println("✅ PLAN CREADO EXITOSAMENTE: ${response.body()}")
-                ApiResponse.Success(response.body()!!)
+                val createdPlan = response.body()!!
+                println("✅ [REPOSITORY] PLAN CREADO EXITOSAMENTE:")
+                println("   - ID: ${createdPlan._id}")
+                println("   - Nombre: ${createdPlan.name}")
+                println("   - Meta: ${createdPlan.targetAmount}")
+                println("   - Meses: ${createdPlan.months}")
+                ApiResponse.Success(createdPlan)
             } else {
-                val errorMsg = response.errorBody()?.string() ?: "Error sin mensaje"
-                println("🔴 ERROR DEL BACKEND: $errorMsg")
-                ApiResponse.Error("Error del servidor: $errorMsg")
+                val errorBody = response.errorBody()?.string() ?: "Error sin cuerpo"
+                println("🔴 [REPOSITORY] ERROR: $errorBody")
+                ApiResponse.Error("Error del servidor: $errorBody")
             }
         } catch (e: Exception) {
-            println("🔴 EXCEPCIÓN: ${e.message}")
-            e.printStackTrace()
+            println("🔴 [REPOSITORY] EXCEPCIÓN: ${e.message}")
             ApiResponse.Error("Error de conexión: ${e.message}")
         }
     }
 
     suspend fun getPlans(): ApiResponse<List<Plan>> {
         return try {
-            println("🟡 SOLICITANDO PLANES AL BACKEND")
+            println("🟡 [REPOSITORY] Solicitando planes al backend...")
             val response = apiService.getPlans()
-            println("🟡 RESPUESTA PLANES - Código: ${response.code()}")
+            println("🟡 [REPOSITORY] Código de respuesta: ${response.code()}")
 
-            if (response.isSuccessful && response.body() != null) {
-                println("✅ PLANES RECIBIDOS: ${response.body()!!.size} planes")
-                ApiResponse.Success(response.body()!!)
+            if (response.isSuccessful) {
+                val plans = response.body() ?: emptyList()
+                println("✅ [REPOSITORY] ¡PLANES RECIBIDOS! Cantidad: ${plans.size}")
+                ApiResponse.Success(plans)
             } else {
                 val errorMsg = response.errorBody()?.string() ?: "Error sin mensaje"
-                println("🔴 ERROR AL OBTENER PLANES: $errorMsg")
-                ApiResponse.Error("Error: ${response.message()}")
+                println("🔴 [REPOSITORY] Error al obtener planes: $errorMsg")
+                ApiResponse.Error("Error del servidor: ${response.code()}")
             }
         } catch (e: Exception) {
-            println("🔴 EXCEPCIÓN AL OBTENER PLANES: ${e.message}")
-            ApiResponse.Error(e.message ?: "Unknown error")
+            println("🔴 [REPOSITORY] Excepción al obtener planes: ${e.message}")
+            e.printStackTrace()
+            ApiResponse.Error("Error de conexión: ${e.message}")
         }
     }
 
-    // Members
+    // Resto de funciones para miembros y pagos...
     suspend fun createMember(member: CreateMemberRequest): ApiResponse<Member> {
         return try {
+            println("🟡 [REPOSITORY] Enviando miembro al backend: $member")
             val response = apiService.createMember(member)
+            println("🟡 [REPOSITORY] Respuesta - Código: ${response.code()}")
+
             if (response.isSuccessful && response.body() != null) {
-                ApiResponse.Success(response.body()!!)
+                val createdMember = response.body()!!
+                println("✅ [REPOSITORY] MIEMBRO CREADO EXITOSAMENTE:")
+                println("   - ID: ${createdMember._id}")
+                println("   - Nombre: ${createdMember.name}")
+                println("   - Plan ID: ${createdMember.planId}")
+                ApiResponse.Success(createdMember)
             } else {
-                ApiResponse.Error("Error: ${response.message()}")
+                val errorBody = response.errorBody()?.string() ?: "Error sin cuerpo"
+                println("🔴 [REPOSITORY] ERROR: $errorBody")
+                ApiResponse.Error("Error del servidor: $errorBody")
             }
         } catch (e: Exception) {
-            ApiResponse.Error(e.message ?: "Unknown error")
+            println("🔴 [REPOSITORY] EXCEPCIÓN: ${e.message}")
+            ApiResponse.Error("Error de conexión: ${e.message}")
         }
     }
 
     suspend fun getMembersByPlan(planId: String): ApiResponse<List<Member>> {
         return try {
+            println("🟡 [REPOSITORY] Solicitando miembros para plan: $planId")
             val response = apiService.getMembersByPlan(planId)
-            if (response.isSuccessful && response.body() != null) {
-                ApiResponse.Success(response.body()!!)
+            println("🟡 [REPOSITORY] Respuesta - Código: ${response.code()}")
+
+            if (response.isSuccessful) {
+                val members = response.body() ?: emptyList()
+                println("✅ [REPOSITORY] MIEMBROS RECIBIDOS: ${members.size}")
+                ApiResponse.Success(members)
             } else {
+                val errorMsg = response.errorBody()?.string() ?: "Error sin mensaje"
+                println("🔴 [REPOSITORY] ERROR: $errorMsg")
                 ApiResponse.Error("Error: ${response.message()}")
             }
         } catch (e: Exception) {
+            println("🔴 [REPOSITORY] EXCEPCIÓN: ${e.message}")
             ApiResponse.Error(e.message ?: "Unknown error")
         }
     }
 
-    // Payments
-    suspend fun createPayment(payment: CreatePaymentRequest): ApiResponse<Payment> {
-        return try {
-            val response = apiService.createPayment(payment)
-            if (response.isSuccessful && response.body() != null) {
-                ApiResponse.Success(response.body()!!)
-            } else {
-                ApiResponse.Error("Error: ${response.message()}")
-            }
-        } catch (e: Exception) {
-            ApiResponse.Error(e.message ?: "Unknown error")
-        }
-    }
+    // Funciones para pagos...
 }

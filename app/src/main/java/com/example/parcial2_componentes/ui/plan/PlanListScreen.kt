@@ -21,6 +21,11 @@ fun PlanListScreen(
 ) {
     val plansState by viewModel.plansState.collectAsStateWithLifecycle()
 
+    // Recargar planes al entrar a la pantalla
+    LaunchedEffect(Unit) {
+        viewModel.loadPlans()
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -51,11 +56,22 @@ fun PlanListScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator()
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator()
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Cargando planes...")
+                    }
                 }
             }
             is ApiResponse.Success -> {
                 val plans = (plansState as ApiResponse.Success<List<Plan>>).data
+
+                Text(
+                    "Total de planes: ${plans.size}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
 
                 if (plans.isEmpty()) {
                     Box(
@@ -122,13 +138,27 @@ fun PlanItem(plan: Plan) {
                 style = MaterialTheme.typography.headlineSmall
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Text("Meta: $${plan.goal}")
+            Text("Meta: $${plan.targetAmount}")
             Text("Recolectado: $${plan.totalCollected}")
-            Text("Miembros: ${plan.members.size}")
+            Text("Miembros: ${plan.members?.size ?: 0}")
+            Text("Duración: ${plan.months} meses")
+            plan.createdAt?.let {
+                Text("Creado: ${it.substring(0, 10)}")
+            }
 
-            // Progress bar - CORREGIDO el tipo de datos
-            val progress = if (plan.goal > 0) {
-                (plan.totalCollected / plan.goal).toFloat()
+            // Mostrar nombres de los miembros si existen
+            plan.members?.takeIf { it.isNotEmpty() }?.let { members ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "Miembros: ${members.joinToString { it.name }}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // Progress bar
+            val progress = if (plan.targetAmount > 0) {
+                (plan.totalCollected / plan.targetAmount).toFloat().coerceIn(0f, 1f)
             } else {
                 0f
             }
@@ -137,6 +167,11 @@ fun PlanItem(plan: Plan) {
             LinearProgressIndicator(
                 progress = progress,
                 modifier = Modifier.fillMaxWidth()
+            )
+
+            Text(
+                "${(progress * 100).toInt()}% completado",
+                style = MaterialTheme.typography.bodySmall
             )
         }
     }
