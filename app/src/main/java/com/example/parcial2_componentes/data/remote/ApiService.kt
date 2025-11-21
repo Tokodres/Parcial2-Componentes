@@ -1,5 +1,11 @@
 package com.example.parcial2_componentes.data.remote
 
+import com.example.parcial2_componentes.data.model.CreateMemberRequest
+import com.example.parcial2_componentes.data.model.CreatePaymentRequest
+import com.example.parcial2_componentes.data.model.CreatePlanRequest
+import com.example.parcial2_componentes.data.model.Member
+import com.example.parcial2_componentes.data.model.Payment
+import com.example.parcial2_componentes.data.model.Plan
 import retrofit2.Response
 import retrofit2.http.*
 

@@ -6,8 +6,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.parcial2_componentes.data.remote.ApiResponse
@@ -53,8 +51,8 @@ fun CreatePlanScreen(
             onValueChange = { goalAmount = it },
             label = { Text("Meta de Ahorro") },
             modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            singleLine = true
+            // Sin keyboardOptions - funcionará igual pero sin teclado numérico específico
         )
 
         Spacer(modifier = Modifier.height(32.dp))
@@ -76,12 +74,10 @@ fun CreatePlanScreen(
             }
         }
 
-        // Manejar el estado de la creacion del plan
+        // Manejar el estado
         LaunchedEffect(createPlanState) {
             when (createPlanState) {
-                is ApiResponse.Loading -> {
-                    isLoading = true
-                }
+                is ApiResponse.Loading -> isLoading = true
                 is ApiResponse.Success<*> -> {
                     isLoading = false
                     onPlanCreated()
@@ -89,7 +85,6 @@ fun CreatePlanScreen(
                 }
                 is ApiResponse.Error -> {
                     isLoading = false
-                    // Mostrar error
                     viewModel.clearCreatePlanState()
                 }
                 else -> {}
