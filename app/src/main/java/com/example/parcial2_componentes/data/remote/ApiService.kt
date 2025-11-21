@@ -1,17 +1,11 @@
 package com.example.parcial2_componentes.data.remote
 
-import com.example.parcial2_componentes.data.model.CreateMemberRequest
-import com.example.parcial2_componentes.data.model.CreatePaymentRequest
-import com.example.parcial2_componentes.data.model.CreatePlanRequest
-import com.example.parcial2_componentes.data.model.Member
-import com.example.parcial2_componentes.data.model.Payment
-import com.example.parcial2_componentes.data.model.Plan
 import retrofit2.Response
 import retrofit2.http.*
+import com.example.parcial2_componentes.data.model.*
 
 interface ApiService {
 
-    // Plans
     @POST("api/plans")
     suspend fun createPlan(@Body plan: CreatePlanRequest): Response<Plan>
 
@@ -21,14 +15,12 @@ interface ApiService {
     @GET("api/plans/{id}")
     suspend fun getPlan(@Path("id") id: String): Response<Plan>
 
-    // Members
     @POST("api/members")
     suspend fun createMember(@Body member: CreateMemberRequest): Response<Member>
 
     @GET("api/members/plan/{planId}")
     suspend fun getMembersByPlan(@Path("planId") planId: String): Response<List<Member>>
 
-    // Payments
     @POST("api/payments")
     suspend fun createPayment(@Body payment: CreatePaymentRequest): Response<Payment>
 
