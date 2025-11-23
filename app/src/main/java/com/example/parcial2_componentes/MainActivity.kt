@@ -14,14 +14,18 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.parcial2_componentes.data.model.Plan
+import com.example.parcial2_componentes.data.model.Member
 import com.example.parcial2_componentes.data.remote.ApiResponse
 import com.example.parcial2_componentes.ui.member.AddMemberScreen
 import com.example.parcial2_componentes.ui.member.viewmodel.MemberViewModel
 import com.example.parcial2_componentes.ui.member.viewmodel.MemberViewModelFactory
+import com.example.parcial2_componentes.ui.payment.PaymentSummaryScreen
+import com.example.parcial2_componentes.ui.payment.RegisterPaymentScreen
+import com.example.parcial2_componentes.ui.payment.viewmodel.PaymentViewModel
+import com.example.parcial2_componentes.ui.payment.viewmodel.PaymentViewModelFactory
 import com.example.parcial2_componentes.ui.plan.CreatePlanScreen
 import com.example.parcial2_componentes.ui.plan.viewmodel.PlanViewModel
 import com.example.parcial2_componentes.ui.plan.viewmodel.PlanViewModelFactory
-import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -50,11 +54,17 @@ fun AppNavigation(planViewModel: PlanViewModel, app: FamilySavingsApp) {
     var currentScreen by remember { mutableStateOf("plan_list") }
     var createdPlanId by remember { mutableStateOf<String?>(null) }
     var createdPlanName by remember { mutableStateOf<String?>(null) }
+    var selectedMember by remember { mutableStateOf<Member?>(null) }
 
     when (currentScreen) {
         "plan_list" -> PlanListScreen(
             viewModel = planViewModel,
-            onCreateNewPlan = { currentScreen = "create_plan" }
+            onCreateNewPlan = { currentScreen = "create_plan" },
+            onViewPayments = { planId, planName ->
+                createdPlanId = planId
+                createdPlanName = planName
+                currentScreen = "payment_summary"
+            }
         )
         "create_plan" -> CreatePlanScreen(
             onPlanCreated = { planId, planName ->
@@ -76,11 +86,55 @@ fun AppNavigation(planViewModel: PlanViewModel, app: FamilySavingsApp) {
                 planName = planName,
                 onMembersAdded = {
                     currentScreen = "plan_list"
-                    planViewModel.loadPlans() // Recargar la lista
+                    planViewModel.refreshPlans() // ✅ Recargar planes
                 },
                 onBack = { currentScreen = "plan_list" },
                 viewModel = memberViewModel
             )
+        }
+        "payment_summary" -> {
+            val planId = createdPlanId ?: ""
+            val planName = createdPlanName ?: "Plan"
+            val paymentViewModel: PaymentViewModel = viewModel(
+                factory = PaymentViewModelFactory(app.repository)
+            )
+            PaymentSummaryScreen(
+                planId = planId,
+                planName = planName,
+                onRegisterPayment = { member ->
+                    selectedMember = member
+                    currentScreen = "register_payment"
+                },
+                onBack = {
+                    currentScreen = "plan_list"
+                    planViewModel.refreshPlans() // ✅ Recargar planes al volver
+                },
+                viewModel = paymentViewModel
+            )
+        }
+        "register_payment" -> {
+            val member = selectedMember
+            val planId = createdPlanId ?: ""
+            val planName = createdPlanName ?: "Plan"
+            val paymentViewModel: PaymentViewModel = viewModel(
+                factory = PaymentViewModelFactory(app.repository)
+            )
+
+            if (member != null) {
+                RegisterPaymentScreen(
+                    member = member,
+                    planId = planId,
+                    planName = planName,
+                    onPaymentRegistered = {
+                        currentScreen = "payment_summary"
+                        planViewModel.refreshPlans() // ✅ Recargar planes después del pago
+                    },
+                    onBack = { currentScreen = "payment_summary" },
+                    viewModel = paymentViewModel
+                )
+            } else {
+                currentScreen = "payment_summary"
+            }
         }
     }
 }
@@ -89,7 +143,8 @@ fun AppNavigation(planViewModel: PlanViewModel, app: FamilySavingsApp) {
 @Composable
 fun PlanListScreen(
     viewModel: PlanViewModel,
-    onCreateNewPlan: () -> Unit
+    onCreateNewPlan: () -> Unit,
+    onViewPayments: (String, String) -> Unit
 ) {
     val plansState by viewModel.plansState.collectAsStateWithLifecycle()
 
@@ -103,7 +158,7 @@ fun PlanListScreen(
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        // Header
+        // Header con botón de actualizar
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -114,8 +169,17 @@ fun PlanListScreen(
                 style = MaterialTheme.typography.headlineMedium
             )
 
-            Button(onClick = onCreateNewPlan) {
-                Text("Nuevo Plan")
+            Row {
+                // Botón de actualizar
+                IconButton(
+                    onClick = { viewModel.refreshPlans() }
+                ) {
+                    Text("🔄")
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Button(onClick = onCreateNewPlan) {
+                    Text("Nuevo Plan")
+                }
             }
         }
 
@@ -165,7 +229,12 @@ fun PlanListScreen(
                 } else {
                     LazyColumn {
                         items(plans) { plan ->
-                            PlanItemCard(plan = plan)
+                            PlanItem(
+                                plan = plan,
+                                onViewPayments = {
+                                    onViewPayments(plan._id ?: "", plan.name)
+                                }
+                            )
                         }
                     }
                 }
@@ -196,9 +265,8 @@ fun PlanListScreen(
     }
 }
 
-// Componente para mostrar un plan (sin botón de eliminar)
 @Composable
-fun PlanItemCard(plan: Plan) {
+fun PlanItem(plan: Plan, onViewPayments: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -211,25 +279,44 @@ fun PlanItemCard(plan: Plan) {
                 style = MaterialTheme.typography.headlineSmall
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Text("Meta: $${plan.targetAmount}")
-            Text("Recolectado: $${plan.totalCollected}")
-            Text("Miembros: ${plan.members?.size ?: 0}")
-            Text("Duración: ${plan.months} meses")
+
+            // ✅ MEJORADO: Mostrar información financiera detallada
+            Text("💰 Meta: $${"%.2f".format(plan.targetAmount)}")
+            Text("💵 Recaudado: $${"%.2f".format(plan.totalCollected)}")
+
+            // Calcular y mostrar diferencia
+            val difference = plan.targetAmount - plan.totalCollected
+            if (difference > 0) {
+                Text(
+                    "📊 Faltan: $${"%.2f".format(difference)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            } else {
+                Text(
+                    "🎉 ¡Meta alcanzada!",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            Text("👥 Miembros: ${plan.members?.size ?: 0}")
+            Text("📅 Duración: ${plan.months} meses")
             plan.createdAt?.let {
-                Text("Creado: ${it.substring(0, 10)}")
+                Text("📝 Creado: ${it.substring(0, 10)}")
             }
 
             // Mostrar nombres de los miembros si existen
             plan.members?.takeIf { it.isNotEmpty() }?.let { members ->
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    "Miembros: ${members.joinToString { it.name }}",
+                    "👤 Miembros: ${members.joinToString { it.name }}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            // Progress bar
+            // Progress bar mejorada
             val progress = if (plan.targetAmount > 0) {
                 (plan.totalCollected / plan.targetAmount).toFloat().coerceIn(0f, 1f)
             } else {
@@ -239,13 +326,37 @@ fun PlanItemCard(plan: Plan) {
             Spacer(modifier = Modifier.height(8.dp))
             LinearProgressIndicator(
                 progress = progress,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                color = if (progress >= 1f) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.primary
             )
 
-            Text(
-                "${(progress * 100).toInt()}% completado",
-                style = MaterialTheme.typography.bodySmall
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    "${(progress * 100).toInt()}% completado",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Text(
+                    "$${"%.2f".format(plan.totalCollected)} / $${"%.2f".format(plan.targetAmount)}",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Botón para registrar pagos
+            Button(
+                onClick = onViewPayments,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Text("💳 Registrar Pagos")
+            }
         }
     }
 }

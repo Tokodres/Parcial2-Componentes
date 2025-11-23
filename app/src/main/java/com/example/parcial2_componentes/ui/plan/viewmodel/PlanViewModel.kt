@@ -1,4 +1,3 @@
-// app/src/main/java/com/example/parcial2_componentes/ui/plan/viewmodel/PlanViewModel.kt
 package com.example.parcial2_componentes.ui.plan.viewmodel
 
 import androidx.lifecycle.ViewModel
@@ -47,5 +46,10 @@ class PlanViewModel(private val repository: FamilySavingsRepository) : ViewModel
 
     fun clearCreatePlanState() {
         _createPlanState.value = null
+    }
+
+    // ✅ NUEVA: Función para recargar planes manualmente
+    fun refreshPlans() {
+        loadPlans()
     }
 }

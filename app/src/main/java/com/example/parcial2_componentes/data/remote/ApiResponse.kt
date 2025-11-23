@@ -1,4 +1,3 @@
-// app/src/main/java/com/example/parcial2_componentes/data/remote/ApiResponse.kt
 package com.example.parcial2_componentes.data.remote
 
 sealed class ApiResponse<out T> {

@@ -1,4 +1,3 @@
-// app/src/main/java/com/example/parcial2_componentes/ui/plan/PlanListScreen.kt
 package com.example.parcial2_componentes.ui.plan
 
 import androidx.compose.foundation.layout.*
@@ -10,20 +9,37 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import com.example.parcial2_componentes.data.model.Plan
+import com.example.parcial2_componentes.data.model.Payment
 import com.example.parcial2_componentes.data.remote.ApiResponse
 import com.example.parcial2_componentes.ui.plan.viewmodel.PlanViewModel
 
 @Composable
 fun PlanListScreen(
     viewModel: PlanViewModel,
-    onCreateNewPlan: () -> Unit
+    onCreateNewPlan: () -> Unit,
+    onViewPayments: (String, String) -> Unit,
+    onEditPlan: (String, String) -> Unit
 ) {
     val plansState by viewModel.plansState.collectAsStateWithLifecycle()
 
-    // Recargar planes al entrar a la pantalla
-    LaunchedEffect(Unit) {
-        viewModel.loadPlans()
+    // ✅ NUEVO: Recargar planes cuando la pantalla se vuelve visible
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.loadPlans()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
     Column(
@@ -93,7 +109,15 @@ fun PlanListScreen(
                 } else {
                     LazyColumn {
                         items(plans) { plan ->
-                            PlanItem(plan = plan)
+                            PlanItem(
+                                plan = plan,
+                                onViewPayments = {
+                                    onViewPayments(plan._id ?: "", plan.name)
+                                },
+                                onEditPlan = {
+                                    onEditPlan(plan._id ?: "", plan.name)
+                                }
+                            )
                         }
                     }
                 }
@@ -125,7 +149,7 @@ fun PlanListScreen(
 }
 
 @Composable
-fun PlanItem(plan: Plan) {
+fun PlanItem(plan: Plan, onViewPayments: () -> Unit, onEditPlan: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -133,20 +157,45 @@ fun PlanItem(plan: Plan) {
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                plan.name,
-                style = MaterialTheme.typography.headlineSmall
-            )
+            // Header con botones de acción
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    plan.name,
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.weight(1f)
+                )
+
+                // Botón para editar
+                TextButton(onClick = onEditPlan) {
+                    Text("✏️")
+                }
+            }
+
             Spacer(modifier = Modifier.height(8.dp))
-            Text("Meta: $${plan.targetAmount}")
-            Text("Recolectado: $${plan.totalCollected}")
+
+            // Información financiera
+            Text("Meta: $${"%.2f".format(plan.targetAmount)}")
+            Text("Recolectado: $${"%.2f".format(plan.totalCollected)}")
+
+            // Progreso numérico
+            val progressPercentage = if (plan.targetAmount > 0) {
+                (plan.totalCollected / plan.targetAmount * 100).toInt()
+            } else {
+                0
+            }
+            Text("Progreso: $progressPercentage%")
+
             Text("Miembros: ${plan.members?.size ?: 0}")
             Text("Duración: ${plan.months} meses")
             plan.createdAt?.let {
                 Text("Creado: ${it.substring(0, 10)}")
             }
 
-            // Mostrar nombres de los miembros si existen
+            // Mostrar nombres de miembros
             plan.members?.takeIf { it.isNotEmpty() }?.let { members ->
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
@@ -154,6 +203,23 @@ fun PlanItem(plan: Plan) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+
+            // Mostrar últimos pagos
+            plan.payments?.takeIf { it.isNotEmpty() }?.let { payments ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "Últimos pagos:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                payments.take(3).forEach { payment ->
+                    Text(
+                        "  • ${payment.memberName ?: "Miembro"}: $${"%.2f".format(payment.amount)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
             // Progress bar
@@ -169,10 +235,33 @@ fun PlanItem(plan: Plan) {
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Text(
-                "${(progress * 100).toInt()}% completado",
-                style = MaterialTheme.typography.bodySmall
-            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Botones de acción
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Button(
+                    onClick = onViewPayments,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("💰 Pagos")
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Button(
+                    onClick = onEditPlan,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                ) {
+                    Text("✏️ Editar")
+                }
+            }
         }
     }
 }

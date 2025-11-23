@@ -5,7 +5,6 @@ import retrofit2.http.*
 import com.example.parcial2_componentes.data.model.*
 
 interface ApiService {
-
     @POST("api/plans")
     suspend fun createPlan(@Body plan: CreatePlanRequest): Response<Plan>
 

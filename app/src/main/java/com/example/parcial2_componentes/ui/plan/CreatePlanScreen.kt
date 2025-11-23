@@ -1,4 +1,3 @@
-// app/src/main/java/com/example/parcial2_componentes/ui/plan/CreatePlanScreen.kt
 package com.example.parcial2_componentes.ui.plan
 
 import androidx.compose.foundation.layout.*
@@ -28,7 +27,6 @@ fun CreatePlanScreen(
 
     val createPlanState by viewModel.createPlanState.collectAsStateWithLifecycle()
 
-    // Manejar el estado de la creación del plan
     LaunchedEffect(createPlanState) {
         when (createPlanState) {
             is ApiResponse.Loading -> {
@@ -42,14 +40,10 @@ fun CreatePlanScreen(
                 errorMessage = null
 
                 val createdPlan = (createPlanState as ApiResponse.Success<com.example.parcial2_componentes.data.model.Plan>).data
-
-                // Limpiar campos después de éxito
                 delay(2000)
                 planName = ""
                 targetAmount = ""
                 months = "12"
-
-                // Llamar callback con ID y nombre del plan creado
                 onPlanCreated(createdPlan._id ?: "", createdPlan.name)
                 viewModel.clearCreatePlanState()
                 showSuccess = false
@@ -84,7 +78,6 @@ fun CreatePlanScreen(
             verticalArrangement = Arrangement.Top,
             horizontalAlignment = Alignment.Start
         ) {
-            // Mostrar mensaje de éxito
             if (showSuccess) {
                 Card(
                     modifier = Modifier
@@ -96,15 +89,11 @@ fun CreatePlanScreen(
                         modifier = Modifier.padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "✅ Plan creado exitosamente!",
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
+                        Text("✅ Plan creado exitosamente!")
                     }
                 }
             }
 
-            // Mostrar mensaje de error
             errorMessage?.let { message ->
                 Card(
                     modifier = Modifier
@@ -116,19 +105,13 @@ fun CreatePlanScreen(
                         modifier = Modifier.padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "❌ $message",
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
+                        Text("❌ $message")
                     }
                 }
             }
 
-            Text(
-                "Información del Plan",
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
+            Text("Información del Plan", style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(bottom = 16.dp))
 
             OutlinedTextField(
                 value = planName,
@@ -148,7 +131,6 @@ fun CreatePlanScreen(
             OutlinedTextField(
                 value = targetAmount,
                 onValueChange = {
-                    // Permitir solo números y punto decimal
                     if (it.isEmpty() || it.matches(Regex("^\\d*\\.?\\d*\$"))) {
                         targetAmount = it
                         errorMessage = null
@@ -166,7 +148,6 @@ fun CreatePlanScreen(
             OutlinedTextField(
                 value = months,
                 onValueChange = {
-                    // Permitir solo números
                     if (it.isEmpty() || it.matches(Regex("^\\d*\$"))) {
                         months = it
                         errorMessage = null
@@ -180,18 +161,13 @@ fun CreatePlanScreen(
             )
 
             Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                "¿Por cuántos meses durará el plan de ahorro?",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Text("¿Por cuántos meses durará el plan de ahorro?",
+                style = MaterialTheme.typography.bodySmall)
 
             Spacer(modifier = Modifier.height(32.dp))
 
             Button(
                 onClick = {
-                    // Validaciones
                     if (planName.isBlank() || targetAmount.isBlank() || months.isBlank()) {
                         errorMessage = "Por favor completa todos los campos obligatorios"
                         return@Button
@@ -239,24 +215,18 @@ fun CreatePlanScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Información adicional
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        "💡 Información",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    Text("💡 Información", style = MaterialTheme.typography.titleSmall)
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         "• El plan familiar te permitirá agregar miembros y registrar sus pagos\n" +
                                 "• Podrás hacer seguimiento del progreso de ahorro\n" +
                                 "• Todos los miembros podrán ver el avance del plan",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
             }

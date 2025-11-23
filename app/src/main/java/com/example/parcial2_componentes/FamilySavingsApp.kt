@@ -1,4 +1,3 @@
-// app/src/main/java/com/example/parcial2_componentes/FamilySavingsApp.kt
 package com.example.parcial2_componentes
 
 import android.app.Application

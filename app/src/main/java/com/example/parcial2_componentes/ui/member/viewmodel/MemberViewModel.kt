@@ -1,4 +1,3 @@
-// app/src/main/java/com/example/parcial2_componentes/ui/member/viewmodel/MemberViewModel.kt
 package com.example.parcial2_componentes.ui.member.viewmodel
 
 import androidx.lifecycle.ViewModel
@@ -19,14 +18,14 @@ class MemberViewModel(private val repository: FamilySavingsRepository) : ViewMod
     private val _membersState = MutableStateFlow<ApiResponse<List<Member>>>(ApiResponse.Loading)
     val membersState: StateFlow<ApiResponse<List<Member>>> = _membersState
 
-    fun createMember(name: String, planId: String) { // ✅ Solo nombre y planId
+    fun createMember(name: String, planId: String) {
         viewModelScope.launch {
             _createMemberState.value = ApiResponse.Loading
 
             val memberRequest = CreateMemberRequest(
                 name = name,
                 planId = planId,
-                contributionPerMonth = 0.0 // ✅ Valor por defecto
+                contributionPerMonth = 0.0
             )
 
             _createMemberState.value = repository.createMember(memberRequest)

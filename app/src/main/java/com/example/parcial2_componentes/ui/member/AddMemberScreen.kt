@@ -1,4 +1,3 @@
-// app/src/main/java/com/example/parcial2_componentes/ui/member/AddMemberScreen.kt
 package com.example.parcial2_componentes.ui.member
 
 import androidx.compose.foundation.layout.*
@@ -28,7 +27,6 @@ fun AddMemberScreen(
 
     val createMemberState by viewModel.createMemberState.collectAsStateWithLifecycle()
 
-    // Manejar el estado de la creación del miembro
     LaunchedEffect(createMemberState) {
         when (createMemberState) {
             is ApiResponse.Loading -> {
@@ -40,8 +38,6 @@ fun AddMemberScreen(
                 isLoading = false
                 showSuccess = true
                 errorMessage = null
-
-                // Limpiar campo después de éxito
                 delay(1500)
                 memberName = ""
                 showSuccess = false
@@ -69,11 +65,12 @@ fun AddMemberScreen(
             )
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
+            FloatingActionButton(
                 onClick = onMembersAdded,
-                icon = { Text("✓") },
-                text = { Text("Finalizar") }
-            )
+                containerColor = MaterialTheme.colorScheme.primary
+            ) {
+                Text("✓")
+            }
         }
     ) { paddingValues ->
         Column(
@@ -82,7 +79,6 @@ fun AddMemberScreen(
                 .padding(paddingValues)
                 .padding(16.dp)
         ) {
-            // Mostrar mensaje de éxito
             if (showSuccess) {
                 Card(
                     modifier = Modifier
@@ -99,7 +95,6 @@ fun AddMemberScreen(
                 }
             }
 
-            // Mostrar mensaje de error
             errorMessage?.let { message ->
                 Card(
                     modifier = Modifier
@@ -143,8 +138,7 @@ fun AddMemberScreen(
                         errorMessage = "Por favor ingresa el nombre del miembro"
                         return@Button
                     }
-
-                    viewModel.createMember(memberName, planId) // ✅ Solo nombre y planId
+                    viewModel.createMember(memberName, planId)
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -168,7 +162,21 @@ fun AddMemberScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Información adicional
+            // Botón adicional para finalizar
+            Button(
+                onClick = onMembersAdded,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.secondary
+                )
+            ) {
+                Text("Finalizar y Volver a Planes")
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)

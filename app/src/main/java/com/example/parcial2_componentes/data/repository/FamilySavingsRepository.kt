@@ -1,4 +1,3 @@
-// app/src/main/java/com/example/parcial2_componentes/data/repository/FamilySavingsRepository.kt
 package com.example.parcial2_componentes.data.repository
 
 import com.example.parcial2_componentes.data.remote.ApiService
@@ -54,7 +53,6 @@ class FamilySavingsRepository(private val apiService: ApiService) {
         }
     }
 
-    // Resto de funciones para miembros y pagos...
     suspend fun createMember(member: CreateMemberRequest): ApiResponse<Member> {
         return try {
             println("🟡 [REPOSITORY] Enviando miembro al backend: $member")
@@ -100,5 +98,79 @@ class FamilySavingsRepository(private val apiService: ApiService) {
         }
     }
 
-    // Funciones para pagos...
+    suspend fun createPayment(payment: CreatePaymentRequest): ApiResponse<Payment> {
+        return try {
+            println("🟡 [REPOSITORY] Enviando pago al backend: $payment")
+            val response = apiService.createPayment(payment)
+            println("🟡 [REPOSITORY] Respuesta - Código: ${response.code()}")
+
+            if (response.isSuccessful && response.body() != null) {
+                val createdPayment = response.body()!!
+                println("✅ [REPOSITORY] PAGO REGISTRADO EXITOSAMENTE:")
+                println("   - ID: ${createdPayment._id}")
+                println("   - Monto: ${createdPayment.amount}")
+                println("   - Miembro ID: ${createdPayment.memberId}")
+                println("   - Plan ID: ${createdPayment.planId}")
+                ApiResponse.Success(createdPayment)
+            } else {
+                val errorBody = response.errorBody()?.string() ?: "Error sin cuerpo"
+                println("🔴 [REPOSITORY] ERROR: $errorBody")
+                ApiResponse.Error("Error del servidor: $errorBody")
+            }
+        } catch (e: Exception) {
+            println("🔴 [REPOSITORY] EXCEPCIÓN: ${e.message}")
+            ApiResponse.Error("Error de conexión: ${e.message}")
+        }
+    }
+
+    suspend fun getPaymentsByPlan(planId: String): ApiResponse<List<Payment>> {
+        return try {
+            println("🟡 [REPOSITORY] Solicitando pagos para plan: $planId")
+            val response = apiService.getPaymentsByPlan(planId)
+            println("🟡 [REPOSITORY] Respuesta - Código: ${response.code()}")
+
+            if (response.isSuccessful) {
+                val payments = response.body() ?: emptyList()
+                println("✅ [REPOSITORY] PAGOS RECIBIDOS: ${payments.size}")
+                ApiResponse.Success(payments)
+            } else {
+                val errorMsg = response.errorBody()?.string() ?: "Error sin mensaje"
+                println("🔴 [REPOSITORY] ERROR: $errorMsg")
+                ApiResponse.Error("Error: ${response.message()}")
+            }
+        } catch (e: Exception) {
+            println("🔴 [REPOSITORY] EXCEPCIÓN: ${e.message}")
+            ApiResponse.Error(e.message ?: "Unknown error")
+        }
+    }
+
+    // ✅ NUEVA FUNCIÓN: Obtener pagos por miembro
+    suspend fun getPaymentsByMember(memberId: String): ApiResponse<List<Payment>> {
+        return try {
+            println("🟡 [REPOSITORY] Solicitando pagos para miembro: $memberId")
+            // Primero obtenemos todos los pagos del plan y luego filtramos por miembro
+            val response = apiService.getPaymentsByPlan("all") // Necesitamos un endpoint que devuelva todos
+            println("🟡 [REPOSITORY] Respuesta - Código: ${response.code()}")
+
+            if (response.isSuccessful) {
+                val allPayments = response.body() ?: emptyList()
+                // Filtramos los pagos por memberId
+                val memberPayments = allPayments.filter { it.memberId == memberId }
+                println("✅ [REPOSITORY] PAGOS DEL MIEMBRO: ${memberPayments.size}")
+                ApiResponse.Success(memberPayments)
+            } else {
+                // Si falla, intentamos obtener todos los pagos y filtrar localmente
+                val allPaymentsResponse = getPaymentsByPlan("all")
+                if (allPaymentsResponse is ApiResponse.Success) {
+                    val memberPayments = allPaymentsResponse.data.filter { it.memberId == memberId }
+                    ApiResponse.Success(memberPayments)
+                } else {
+                    ApiResponse.Error("No se pudieron obtener los pagos del miembro")
+                }
+            }
+        } catch (e: Exception) {
+            println("🔴 [REPOSITORY] EXCEPCIÓN: ${e.message}")
+            ApiResponse.Error("Error de conexión: ${e.message}")
+        }
+    }
 }
