@@ -30,7 +30,9 @@ fun AddMemberScreen(
 
     val createMemberState by viewModel.createMemberState.collectAsStateWithLifecycle()
     val isProcessing by viewModel.isProcessing.collectAsStateWithLifecycle()
+    val operationCompleted by viewModel.operationCompleted.collectAsStateWithLifecycle()
 
+    // ✅ CORREGIDO: Manejo mejorado del estado con operación completada
     LaunchedEffect(createMemberState) {
         when (createMemberState) {
             is ApiResponse.Loading -> {
@@ -45,11 +47,9 @@ fun AddMemberScreen(
                 errorMessage = null
                 retryCount = 0
 
-                delay(1000)
+                // ✅ Solo limpiar el campo inmediatamente, no navegar
                 memberName = ""
-                showSuccess = false
                 viewModel.clearCreateMemberState()
-                viewModel.resetProcessing()
             }
             is ApiResponse.Error -> {
                 isLoading = false
@@ -58,9 +58,16 @@ fun AddMemberScreen(
                 errorMessage = error
                 retryCount++
                 viewModel.clearCreateMemberState()
-                viewModel.resetProcessing()
             }
             else -> {}
+        }
+    }
+
+    // ✅ NUEVO: Manejar cuando la operación se completa exitosamente
+    LaunchedEffect(operationCompleted) {
+        if (operationCompleted) {
+            // Opcional: Podemos hacer algo cuando se completa, pero no navegamos automáticamente
+            viewModel.resetOperationCompleted()
         }
     }
 
@@ -74,8 +81,22 @@ fun AddMemberScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Text("←")
+                    IconButton(
+                        onClick = {
+                            if (!isProcessing) {
+                                onBack()
+                            }
+                        }
+                    ) {
+                        // ✅ Indicar si está procesando
+                        if (isProcessing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Text("←")
+                        }
                     }
                 }
             )
@@ -90,6 +111,7 @@ fun AddMemberScreen(
                         }
                     },
                     containerColor = MaterialTheme.colorScheme.primary
+                    // ❌ ELIMINADO: enabled = !isProcessing - Este parámetro no existe en FloatingActionButton
                 ) {
                     // ✅ CORREGIDO: Cambiar opacidad cuando está procesando
                     Box(
@@ -108,6 +130,28 @@ fun AddMemberScreen(
                 .padding(paddingValues)
                 .padding(16.dp)
         ) {
+            // ✅ MEJORADO: Mostrar estado de procesamiento más claramente
+            if (isProcessing) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Procesando...")
+                    }
+                }
+            }
+
             if (showSuccess) {
                 Card(
                     modifier = Modifier
@@ -144,27 +188,6 @@ fun AddMemberScreen(
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
-                    }
-                }
-            }
-
-            if (isProcessing && retryCount > 0) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Reintentando... ($retryCount/3)")
                     }
                 }
             }
@@ -208,9 +231,9 @@ fun AddMemberScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
-                enabled = !isLoading && !isProcessing
+                enabled = !isProcessing && memberName.isNotBlank() // ✅ Solo habilitar si no está procesando y hay nombre
             ) {
-                if (isLoading || isProcessing) {
+                if (isProcessing) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(16.dp),
@@ -242,7 +265,7 @@ fun AddMemberScreen(
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.secondary
                 ),
-                enabled = !isProcessing
+                enabled = !isProcessing // ✅ No permitir navegar mientras procesa
             ) {
                 Text(
                     if (isAddingMoreMembers) "Volver a Planes"

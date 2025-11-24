@@ -34,7 +34,7 @@ fun RegisterPaymentScreen(
     val memberPaymentsState by viewModel.memberPaymentsState.collectAsStateWithLifecycle()
     val currentPlan by viewModel.currentPlan.collectAsStateWithLifecycle()
 
-    // Efecto para cargar datos cuando el miembro o plan cambian
+    // ✅ CORREGIDO: Cargar datos inmediatamente y manejar estados correctamente
     LaunchedEffect(member._id, planId) {
         viewModel.setCurrentMemberAndPlan(member._id ?: "", planId)
         // Resetear estado local cuando el miembro cambia
@@ -43,6 +43,10 @@ fun RegisterPaymentScreen(
         showSuccess = false
         showOverpaymentWarning = false
         pendingPaymentAmount = 0.0
+
+        // ✅ Cargar datos necesarios
+        viewModel.loadPaymentsByMember(member._id ?: "")
+        viewModel.loadPlan(planId)
     }
 
     // Calcular total pagado por el miembro
@@ -62,7 +66,7 @@ fun RegisterPaymentScreen(
         remaining
     }
 
-    // Manejar el estado de la creación del pago
+    // ✅ CORREGIDO: Manejo mejorado del estado de creación de pago
     LaunchedEffect(createPaymentState) {
         when (createPaymentState) {
             is ApiResponse.Loading -> {
@@ -77,16 +81,15 @@ fun RegisterPaymentScreen(
                 errorMessage = null
                 showOverpaymentWarning = false
 
-                // Recargar datos después del éxito
+                // ✅ Recargar datos inmediatamente después del éxito
                 viewModel.loadPaymentsByMember(member._id ?: "")
                 viewModel.loadPlan(planId)
 
-                // Limpiar campo y navegar después de éxito
-                delay(2000)
+                // ✅ Limpiar campo y mantener pantalla por 2 segundos para mostrar éxito
                 amount = ""
-                onPaymentRegistered()
-                viewModel.clearCreatePaymentState()
+                delay(2000)
                 showSuccess = false
+                viewModel.clearCreatePaymentState()
             }
             is ApiResponse.Error -> {
                 isLoading = false

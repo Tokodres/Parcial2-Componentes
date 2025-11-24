@@ -23,6 +23,10 @@ class MemberViewModel(private val repository: FamilySavingsRepository) : ViewMod
     private val _isProcessing = MutableStateFlow(false)
     val isProcessing: StateFlow<Boolean> = _isProcessing
 
+    // ✅ NUEVO: Estado para controlar si se completó una operación
+    private val _operationCompleted = MutableStateFlow(false)
+    val operationCompleted: StateFlow<Boolean> = _operationCompleted
+
     fun createMember(name: String, planId: String) {
         // ✅ NUEVO: Prevenir múltiples llamadas simultáneas
         if (_isProcessing.value) {
@@ -31,6 +35,7 @@ class MemberViewModel(private val repository: FamilySavingsRepository) : ViewMod
 
         viewModelScope.launch {
             _isProcessing.value = true
+            _operationCompleted.value = false // ✅ Resetear estado de completado
             _createMemberState.value = ApiResponse.Loading
 
             try {
@@ -49,7 +54,7 @@ class MemberViewModel(private val repository: FamilySavingsRepository) : ViewMod
                     try {
                         val response = repository.createMember(memberRequest)
                         _createMemberState.value = response
-                        success = true
+                        success = response is ApiResponse.Success
                     } catch (e: Exception) {
                         lastError = e
                         retryCount++
@@ -64,6 +69,8 @@ class MemberViewModel(private val repository: FamilySavingsRepository) : ViewMod
                     _createMemberState.value = ApiResponse.Error(
                         "Error de conexión después de 3 intentos: ${lastError?.message ?: "Error desconocido"}"
                     )
+                } else {
+                    _operationCompleted.value = true // ✅ Marcar operación como completada
                 }
 
             } catch (e: Exception) {
@@ -109,5 +116,10 @@ class MemberViewModel(private val repository: FamilySavingsRepository) : ViewMod
     // ✅ NUEVO: Función para resetear el estado de procesamiento
     fun resetProcessing() {
         _isProcessing.value = false
+    }
+
+    // ✅ NUEVA FUNCIÓN: Resetear estado de operación completada
+    fun resetOperationCompleted() {
+        _operationCompleted.value = false
     }
 }

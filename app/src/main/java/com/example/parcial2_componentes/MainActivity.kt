@@ -56,35 +56,46 @@ fun AppNavigation(planViewModel: PlanViewModel, app: FamilySavingsApp) {
     var createdPlanName by remember { mutableStateOf<String?>(null) }
     var selectedMember by remember { mutableStateOf<Member?>(null) }
 
+    // ✅ NUEVO: Estado para prevenir navegación durante operaciones
+    var isAnyOperationInProgress by remember { mutableStateOf(false) }
+
     // Resetear selectedMember cuando cambiamos de pantalla
     LaunchedEffect(currentScreen) {
         if (currentScreen != "register_payment") {
             selectedMember = null
+        }
+        isAnyOperationInProgress = false
+    }
+
+    // ✅ NUEVO: Función segura para cambiar de pantalla
+    fun safeNavigateTo(screen: String) {
+        if (!isAnyOperationInProgress) {
+            currentScreen = screen
         }
     }
 
     when (currentScreen) {
         "plan_list" -> PlanListScreen(
             viewModel = planViewModel,
-            onCreateNewPlan = { currentScreen = "create_plan" },
+            onCreateNewPlan = { safeNavigateTo("create_plan") },
             onViewPayments = { planId, planName ->
                 createdPlanId = planId
                 createdPlanName = planName
-                currentScreen = "payment_summary"
+                safeNavigateTo("payment_summary")
             },
             onAddMoreMembers = { planId, planName -> // ✅ NUEVO: Navegación para agregar más miembros
                 createdPlanId = planId
                 createdPlanName = planName
-                currentScreen = "add_more_members"
+                safeNavigateTo("add_more_members")
             }
         )
         "create_plan" -> CreatePlanScreen(
             onPlanCreated = { planId, planName ->
                 createdPlanId = planId
                 createdPlanName = planName
-                currentScreen = "add_members"
+                safeNavigateTo("add_members")
             },
-            onBack = { currentScreen = "plan_list" },
+            onBack = { safeNavigateTo("plan_list") },
             viewModel = planViewModel
         )
         "add_members" -> {
@@ -93,14 +104,22 @@ fun AppNavigation(planViewModel: PlanViewModel, app: FamilySavingsApp) {
             val memberViewModel: MemberViewModel = viewModel(
                 factory = MemberViewModelFactory(app.repository)
             )
+
+            // ✅ NUEVO: Observar si hay operaciones en progreso
+            val isProcessing by memberViewModel.isProcessing.collectAsStateWithLifecycle()
+
+            LaunchedEffect(isProcessing) {
+                isAnyOperationInProgress = isProcessing
+            }
+
             AddMemberScreen(
                 planId = planId,
                 planName = planName,
                 onMembersAdded = {
-                    currentScreen = "plan_list"
+                    safeNavigateTo("plan_list")
                     planViewModel.refreshPlans() // Recargar planes
                 },
-                onBack = { currentScreen = "plan_list" },
+                onBack = { safeNavigateTo("plan_list") },
                 viewModel = memberViewModel,
                 isAddingMoreMembers = false // ✅ Contexto: creación inicial de plan
             )
@@ -111,14 +130,22 @@ fun AppNavigation(planViewModel: PlanViewModel, app: FamilySavingsApp) {
             val memberViewModel: MemberViewModel = viewModel(
                 factory = MemberViewModelFactory(app.repository)
             )
+
+            // ✅ NUEVO: Observar si hay operaciones en progreso
+            val isProcessing by memberViewModel.isProcessing.collectAsStateWithLifecycle()
+
+            LaunchedEffect(isProcessing) {
+                isAnyOperationInProgress = isProcessing
+            }
+
             AddMemberScreen(
                 planId = planId,
                 planName = planName,
                 onMembersAdded = {
-                    currentScreen = "plan_list"
+                    safeNavigateTo("plan_list")
                     planViewModel.refreshPlans() // Recargar planes
                 },
-                onBack = { currentScreen = "plan_list" },
+                onBack = { safeNavigateTo("plan_list") },
                 viewModel = memberViewModel,
                 isAddingMoreMembers = true // ✅ Contexto: agregar más miembros a plan existente
             )
@@ -134,14 +161,14 @@ fun AppNavigation(planViewModel: PlanViewModel, app: FamilySavingsApp) {
                 planName = planName,
                 onRegisterPayment = { member ->
                     selectedMember = member
-                    currentScreen = "register_payment"
+                    safeNavigateTo("register_payment")
                 },
                 onBack = {
-                    currentScreen = "plan_list"
+                    safeNavigateTo("plan_list")
                     planViewModel.refreshPlans() // Recargar planes al volver
                 },
                 onAddMoreMembers = { // ✅ NUEVO: Callback para agregar más miembros desde el resumen de pagos
-                    currentScreen = "add_more_members"
+                    safeNavigateTo("add_more_members")
                 },
                 viewModel = paymentViewModel
             )
@@ -155,22 +182,29 @@ fun AppNavigation(planViewModel: PlanViewModel, app: FamilySavingsApp) {
             )
 
             if (member != null) {
+                // ✅ NUEVO: Observar si hay operaciones en progreso
+                val createPaymentState by paymentViewModel.createPaymentState.collectAsStateWithLifecycle()
+
+                LaunchedEffect(createPaymentState) {
+                    isAnyOperationInProgress = createPaymentState is ApiResponse.Loading
+                }
+
                 RegisterPaymentScreen(
                     member = member,
                     planId = planId,
                     planName = planName,
                     onPaymentRegistered = {
-                        currentScreen = "payment_summary"
+                        safeNavigateTo("payment_summary")
                         planViewModel.refreshPlans()
                     },
                     onBack = {
-                        currentScreen = "payment_summary"
+                        safeNavigateTo("payment_summary")
                         selectedMember = null // Resetear miembro seleccionado
                     },
                     viewModel = paymentViewModel
                 )
             } else {
-                currentScreen = "payment_summary"
+                safeNavigateTo("payment_summary")
             }
         }
     }

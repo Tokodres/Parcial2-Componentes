@@ -147,29 +147,37 @@ class FamilySavingsRepository(private val apiService: ApiService) {
         }
     }
 
-    // ✅ NUEVA FUNCIÓN: Obtener pagos por miembro
+    // ✅ CORREGIDO: Obtener pagos por miembro - versión mejorada
     suspend fun getPaymentsByMember(memberId: String): ApiResponse<List<Payment>> {
         return try {
             println("🟡 [REPOSITORY] Solicitando pagos para miembro: $memberId")
-            // Primero obtenemos todos los pagos del plan y luego filtramos por miembro
-            val response = apiService.getPaymentsByPlan("all") // Necesitamos un endpoint que devuelva todos
-            println("🟡 [REPOSITORY] Respuesta - Código: ${response.code()}")
 
-            if (response.isSuccessful) {
-                val allPayments = response.body() ?: emptyList()
-                // Filtramos los pagos por memberId
-                val memberPayments = allPayments.filter { it.memberId == memberId }
-                println("✅ [REPOSITORY] PAGOS DEL MIEMBRO: ${memberPayments.size}")
-                ApiResponse.Success(memberPayments)
-            } else {
-                // Si falla, intentamos obtener todos los pagos y filtrar localmente
-                val allPaymentsResponse = getPaymentsByPlan("all")
-                if (allPaymentsResponse is ApiResponse.Success) {
-                    val memberPayments = allPaymentsResponse.data.filter { it.memberId == memberId }
-                    ApiResponse.Success(memberPayments)
-                } else {
-                    ApiResponse.Error("No se pudieron obtener los pagos del miembro")
+            // Obtenemos todos los planes
+            val plansResponse = getPlans()
+
+            if (plansResponse is ApiResponse.Success) {
+                val allPayments = mutableListOf<Payment>()
+
+                // Recorrer todos los planes y recolectar pagos del miembro
+                for (plan in plansResponse.data) {
+                    plan._id?.let { planId ->
+                        try {
+                            val paymentsResponse = getPaymentsByPlan(planId)
+                            if (paymentsResponse is ApiResponse.Success) {
+                                val memberPayments = paymentsResponse.data.filter { it.memberId == memberId }
+                                allPayments.addAll(memberPayments)
+                            }
+                        } catch (e: Exception) {
+                            println("🔴 [REPOSITORY] Error obteniendo pagos del plan $planId: ${e.message}")
+                            // Continuar con el siguiente plan si hay error
+                        }
+                    }
                 }
+
+                println("✅ [REPOSITORY] PAGOS DEL MIEMBRO ENCONTRADOS: ${allPayments.size}")
+                ApiResponse.Success(allPayments)
+            } else {
+                ApiResponse.Error("No se pudieron obtener los planes para buscar los pagos")
             }
         } catch (e: Exception) {
             println("🔴 [REPOSITORY] EXCEPCIÓN: ${e.message}")
