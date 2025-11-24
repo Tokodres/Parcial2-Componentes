@@ -30,6 +30,10 @@ class PaymentViewModel(private val repository: FamilySavingsRepository) : ViewMo
     private val _currentPlan = MutableStateFlow<Plan?>(null)
     val currentPlan: StateFlow<Plan?> = _currentPlan
 
+    // Estados para controlar el miembro actual y plan actual
+    private val _currentMemberId = MutableStateFlow<String?>(null)
+    private val _currentPlanId = MutableStateFlow<String?>(null)
+
     fun loadPaymentsByPlan(planId: String) {
         viewModelScope.launch {
             _paymentsState.value = ApiResponse.Loading
@@ -44,7 +48,6 @@ class PaymentViewModel(private val repository: FamilySavingsRepository) : ViewMo
         }
     }
 
-    // ✅ NUEVA: Cargar pagos de un miembro específico
     fun loadPaymentsByMember(memberId: String) {
         viewModelScope.launch {
             _memberPaymentsState.value = ApiResponse.Loading
@@ -52,7 +55,6 @@ class PaymentViewModel(private val repository: FamilySavingsRepository) : ViewMo
         }
     }
 
-    // ✅ NUEVA: Cargar información del plan
     fun loadPlan(planId: String) {
         viewModelScope.launch {
             // Cargamos todos los planes y filtramos por ID
@@ -60,10 +62,8 @@ class PaymentViewModel(private val repository: FamilySavingsRepository) : ViewMo
                 is ApiResponse.Success -> {
                     val plan = response.data.find { it._id == planId }
                     _currentPlan.value = plan
-                    println("✅ [VIEWMODEL] Plan cargado: ${plan?.name}")
                 }
                 is ApiResponse.Error -> {
-                    println("🔴 [VIEWMODEL] Error al cargar plan: ${response.message}")
                     _currentPlan.value = null
                 }
                 else -> {
@@ -89,5 +89,36 @@ class PaymentViewModel(private val repository: FamilySavingsRepository) : ViewMo
 
     fun clearCreatePaymentState() {
         _createPaymentState.value = null
+    }
+
+    // Función para resetear estados cuando cambia el miembro
+    fun resetMemberSpecificState() {
+        _memberPaymentsState.value = ApiResponse.Loading
+        _createPaymentState.value = null
+    }
+
+    // Función para setear el miembro y plan actual y cargar datos
+    fun setCurrentMemberAndPlan(memberId: String, planId: String) {
+        // Si el miembro cambia, reseteamos los estados específicos del miembro
+        if (_currentMemberId.value != memberId) {
+            resetMemberSpecificState()
+        }
+        _currentMemberId.value = memberId
+        _currentPlanId.value = planId
+
+        // Cargar datos del miembro y plan
+        loadPaymentsByMember(memberId)
+        loadPlan(planId)
+    }
+
+    // Limpiar todo el estado
+    fun clearAllState() {
+        _paymentsState.value = ApiResponse.Loading
+        _membersState.value = ApiResponse.Loading
+        _memberPaymentsState.value = ApiResponse.Loading
+        _createPaymentState.value = null
+        _currentPlan.value = null
+        _currentMemberId.value = null
+        _currentPlanId.value = null
     }
 }

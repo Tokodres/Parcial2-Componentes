@@ -150,6 +150,9 @@ fun PlanListScreen(
 
 @Composable
 fun PlanItem(plan: Plan, onViewPayments: () -> Unit, onEditPlan: () -> Unit) {
+    // Calcular lo que falta para la meta
+    val remainingAmount = plan.targetAmount - plan.totalCollected
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -177,47 +180,73 @@ fun PlanItem(plan: Plan, onViewPayments: () -> Unit, onEditPlan: () -> Unit) {
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Información financiera
-            Text("Meta: $${"%.2f".format(plan.targetAmount)}")
-            Text("Recolectado: $${"%.2f".format(plan.totalCollected)}")
-
-            // Progreso numérico
-            val progressPercentage = if (plan.targetAmount > 0) {
-                (plan.totalCollected / plan.targetAmount * 100).toInt()
-            } else {
-                0
-            }
-            Text("Progreso: $progressPercentage%")
-
-            Text("Miembros: ${plan.members?.size ?: 0}")
-            Text("Duración: ${plan.months} meses")
-            plan.createdAt?.let {
-                Text("Creado: ${it.substring(0, 10)}")
-            }
-
-            // Mostrar nombres de miembros
-            plan.members?.takeIf { it.isNotEmpty() }?.let { members ->
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    "Miembros: ${members.joinToString { it.name }}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+            // ✅ NUEVO: Información de lo que falta
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (remainingAmount > 0)
+                        MaterialTheme.colorScheme.surfaceVariant
+                    else
+                        MaterialTheme.colorScheme.primaryContainer
                 )
-            }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            if (remainingAmount > 0) "💰 Falta para la meta" else "🎉 ¡Meta alcanzada!",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            if (remainingAmount > 0) "$${"%.2f".format(remainingAmount)}" else "Completado",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = if (remainingAmount > 0) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.primary
+                        )
+                    }
 
-            // Mostrar últimos pagos
-            plan.payments?.takeIf { it.isNotEmpty() }?.let { payments ->
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    "Últimos pagos:",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                payments.take(3).forEach { payment ->
+                    // Porcentaje de completado
                     Text(
-                        "  • ${payment.memberName ?: "Miembro"}: $${"%.2f".format(payment.amount)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        "${((plan.totalCollected / plan.targetAmount) * 100).toInt()}%",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Información financiera existente
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text("Meta total", style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        "$${"%.2f".format(plan.targetAmount)}",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+                Column {
+                    Text("Recolectado", style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        "$${"%.2f".format(plan.totalCollected)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Column {
+                    Text("Miembros", style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        "${plan.members?.size ?: 0}",
+                        style = MaterialTheme.typography.bodyMedium
                     )
                 }
             }
@@ -234,6 +263,25 @@ fun PlanItem(plan: Plan, onViewPayments: () -> Unit, onEditPlan: () -> Unit) {
                 progress = progress,
                 modifier = Modifier.fillMaxWidth()
             )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Información adicional
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    "Duración: ${plan.months} meses",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                plan.createdAt?.let {
+                    Text(
+                        "Creado: ${it.substring(0, 10)}",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
 

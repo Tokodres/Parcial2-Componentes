@@ -26,11 +26,25 @@ fun PaymentSummaryScreen(
 ) {
     val membersState by viewModel.membersState.collectAsStateWithLifecycle()
     val paymentsState by viewModel.paymentsState.collectAsStateWithLifecycle()
+    val currentPlan by viewModel.currentPlan.collectAsStateWithLifecycle()
+
+    // Mapa de IDs a nombres de miembros
+    val memberNameMap = remember(membersState) {
+        when (membersState) {
+            is ApiResponse.Success -> {
+                (membersState as ApiResponse.Success<List<Member>>).data.associate {
+                    it._id to it.name
+                }
+            }
+            else -> emptyMap()
+        }
+    }
 
     // Cargar datos al iniciar
     LaunchedEffect(planId) {
         viewModel.loadMembersByPlan(planId)
         viewModel.loadPaymentsByPlan(planId)
+        viewModel.loadPlan(planId)
     }
 
     // Calcular total recaudado
@@ -58,6 +72,12 @@ fun PaymentSummaryScreen(
         }
     }
 
+    // Calcular lo que falta para la meta
+    val remainingAmount = remember(currentPlan, totalCollected) {
+        val targetAmount = currentPlan?.targetAmount ?: 0.0
+        targetAmount - totalCollected
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -73,6 +93,7 @@ fun PaymentSummaryScreen(
                         onClick = {
                             viewModel.loadMembersByPlan(planId)
                             viewModel.loadPaymentsByPlan(planId)
+                            viewModel.loadPlan(planId)
                         }
                     ) {
                         Text("🔄")
@@ -127,6 +148,28 @@ fun PaymentSummaryScreen(
                                 }
                             }
                             else -> {}
+                        }
+                    }
+
+                    // Mostrar cuánto falta para la meta
+                    currentPlan?.let { plan ->
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Divider()
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                if (remainingAmount > 0) "💰 Falta para la meta" else "🎉 ¡Meta alcanzada!",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                if (remainingAmount > 0) "$${"%.2f".format(remainingAmount)}" else "Completado",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = if (remainingAmount > 0) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.primary
+                            )
                         }
                     }
 
@@ -288,7 +331,8 @@ fun PaymentSummaryScreen(
                             modifier = Modifier.heightIn(max = 200.dp)
                         ) {
                             items(payments.sortedByDescending { it.date }.take(10)) { payment ->
-                                PaymentHistoryItem(payment = payment)
+                                val memberName = memberNameMap[payment.memberId] ?: "Miembro"
+                                PaymentHistoryItem(payment = payment, memberName = memberName)
                                 if (payment != payments.minByOrNull { it.date ?: "" }) {
                                     Divider(modifier = Modifier.padding(horizontal = 8.dp))
                                 }
@@ -403,7 +447,7 @@ fun MemberPaymentItem(member: Member, totalPaid: Double, onRegisterPayment: () -
 }
 
 @Composable
-fun PaymentHistoryItem(payment: Payment) {
+fun PaymentHistoryItem(payment: Payment, memberName: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -415,7 +459,7 @@ fun PaymentHistoryItem(payment: Payment) {
             modifier = Modifier.weight(1f)
         ) {
             Text(
-                payment.memberName ?: "Miembro",
+                memberName,
                 style = MaterialTheme.typography.bodyMedium
             )
             payment.date?.let { date ->

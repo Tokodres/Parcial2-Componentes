@@ -56,6 +56,13 @@ fun AppNavigation(planViewModel: PlanViewModel, app: FamilySavingsApp) {
     var createdPlanName by remember { mutableStateOf<String?>(null) }
     var selectedMember by remember { mutableStateOf<Member?>(null) }
 
+    // Resetear selectedMember cuando cambiamos de pantalla
+    LaunchedEffect(currentScreen) {
+        if (currentScreen != "register_payment") {
+            selectedMember = null
+        }
+    }
+
     when (currentScreen) {
         "plan_list" -> PlanListScreen(
             viewModel = planViewModel,
@@ -86,7 +93,7 @@ fun AppNavigation(planViewModel: PlanViewModel, app: FamilySavingsApp) {
                 planName = planName,
                 onMembersAdded = {
                     currentScreen = "plan_list"
-                    planViewModel.refreshPlans() // ✅ Recargar planes
+                    planViewModel.refreshPlans() // Recargar planes
                 },
                 onBack = { currentScreen = "plan_list" },
                 viewModel = memberViewModel
@@ -98,7 +105,7 @@ fun AppNavigation(planViewModel: PlanViewModel, app: FamilySavingsApp) {
             val paymentViewModel: PaymentViewModel = viewModel(
                 factory = PaymentViewModelFactory(app.repository)
             )
-            PaymentSummaryScreen(
+            PaymentSummaryScreen(  // ✅ ESTA PARTE QUEDA EXACTAMENTE IGUAL
                 planId = planId,
                 planName = planName,
                 onRegisterPayment = { member ->
@@ -107,7 +114,7 @@ fun AppNavigation(planViewModel: PlanViewModel, app: FamilySavingsApp) {
                 },
                 onBack = {
                     currentScreen = "plan_list"
-                    planViewModel.refreshPlans() // ✅ Recargar planes al volver
+                    planViewModel.refreshPlans() // Recargar planes al volver
                 },
                 viewModel = paymentViewModel
             )
@@ -127,9 +134,12 @@ fun AppNavigation(planViewModel: PlanViewModel, app: FamilySavingsApp) {
                     planName = planName,
                     onPaymentRegistered = {
                         currentScreen = "payment_summary"
-                        planViewModel.refreshPlans() // ✅ Recargar planes después del pago
+                        planViewModel.refreshPlans()
                     },
-                    onBack = { currentScreen = "payment_summary" },
+                    onBack = {
+                        currentScreen = "payment_summary"
+                        selectedMember = null // Resetear miembro seleccionado
+                    },
                     viewModel = paymentViewModel
                 )
             } else {
@@ -147,6 +157,8 @@ fun PlanListScreen(
     onViewPayments: (String, String) -> Unit
 ) {
     val plansState by viewModel.plansState.collectAsStateWithLifecycle()
+    val membersByPlan by viewModel.membersByPlan.collectAsStateWithLifecycle()
+    val totalCollectedByPlan by viewModel.totalCollectedByPlan.collectAsStateWithLifecycle() // ✅ NUEVO
 
     // Recargar planes al entrar a la pantalla
     LaunchedEffect(Unit) {
@@ -229,8 +241,14 @@ fun PlanListScreen(
                 } else {
                     LazyColumn {
                         items(plans) { plan ->
+                            // Obtener miembros para este plan específico
+                            val planMembers = plan._id?.let { membersByPlan[it] } ?: emptyList()
+                            // ✅ NUEVO: Obtener total recaudado calculado
+                            val planTotalCollected = plan._id?.let { totalCollectedByPlan[it] } ?: 0.0
                             PlanItem(
                                 plan = plan,
+                                planMembers = planMembers,
+                                totalCollected = planTotalCollected, // ✅ Pasar el total calculado
                                 onViewPayments = {
                                     onViewPayments(plan._id ?: "", plan.name)
                                 }
@@ -266,7 +284,15 @@ fun PlanListScreen(
 }
 
 @Composable
-fun PlanItem(plan: Plan, onViewPayments: () -> Unit) {
+fun PlanItem(
+    plan: Plan,
+    planMembers: List<Member>,
+    totalCollected: Double, // ✅ NUEVO: Recibir el total calculado
+    onViewPayments: () -> Unit
+) {
+    // Calcular lo que falta para la meta usando el total calculado
+    val remainingAmount = plan.targetAmount - totalCollected // ✅ Usar totalCollected en lugar de plan.totalCollected
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -280,45 +306,80 @@ fun PlanItem(plan: Plan, onViewPayments: () -> Unit) {
             )
             Spacer(modifier = Modifier.height(8.dp))
 
-            // ✅ MEJORADO: Mostrar información financiera detallada
-            Text("💰 Meta: $${"%.2f".format(plan.targetAmount)}")
-            Text("💵 Recaudado: $${"%.2f".format(plan.totalCollected)}")
+            // Información de lo que falta
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (remainingAmount > 0)
+                        MaterialTheme.colorScheme.surfaceVariant
+                    else
+                        MaterialTheme.colorScheme.primaryContainer
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            if (remainingAmount > 0) "💰 Falta para la meta" else "🎉 ¡Meta alcanzada!",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            if (remainingAmount > 0) "$${"%.2f".format(remainingAmount)}" else "Completado",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = if (remainingAmount > 0) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.primary
+                        )
+                    }
 
-            // Calcular y mostrar diferencia
-            val difference = plan.targetAmount - plan.totalCollected
-            if (difference > 0) {
-                Text(
-                    "📊 Faltan: $${"%.2f".format(difference)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            } else {
-                Text(
-                    "🎉 ¡Meta alcanzada!",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                    // Porcentaje de completado
+                    Text(
+                        "${((totalCollected / plan.targetAmount) * 100).toInt()}%", // ✅ Usar totalCollected
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
 
-            Text("👥 Miembros: ${plan.members?.size ?: 0}")
-            Text("📅 Duración: ${plan.months} meses")
-            plan.createdAt?.let {
-                Text("📝 Creado: ${it.substring(0, 10)}")
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Información financiera existente
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text("Meta total", style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        "$${"%.2f".format(plan.targetAmount)}",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+                Column {
+                    Text("Recolectado", style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        "$${"%.2f".format(totalCollected)}", // ✅ Usar totalCollected calculado
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Column {
+                    Text("Miembros", style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        "${planMembers.size}",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
             }
 
-            // Mostrar nombres de los miembros si existen
-            plan.members?.takeIf { it.isNotEmpty() }?.let { members ->
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    "👤 Miembros: ${members.joinToString { it.name }}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            // Progress bar mejorada
+            // Progress bar - usar el total calculado
             val progress = if (plan.targetAmount > 0) {
-                (plan.totalCollected / plan.targetAmount).toFloat().coerceIn(0f, 1f)
+                (totalCollected / plan.targetAmount).toFloat().coerceIn(0f, 1f) // ✅ Usar totalCollected
             } else {
                 0f
             }
@@ -326,23 +387,36 @@ fun PlanItem(plan: Plan, onViewPayments: () -> Unit) {
             Spacer(modifier = Modifier.height(8.dp))
             LinearProgressIndicator(
                 progress = progress,
-                modifier = Modifier.fillMaxWidth(),
-                color = if (progress >= 1f) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.primary
+                modifier = Modifier.fillMaxWidth()
             )
 
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Mostrar nombres de miembros si existen
+            if (planMembers.isNotEmpty()) {
+                Text(
+                    "Miembros: ${planMembers.joinToString { it.name }}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+
+            // Información adicional
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    "${(progress * 100).toInt()}% completado",
+                    "Duración: ${plan.months} meses",
                     style = MaterialTheme.typography.bodySmall
                 )
-                Text(
-                    "$${"%.2f".format(plan.totalCollected)} / $${"%.2f".format(plan.targetAmount)}",
-                    style = MaterialTheme.typography.bodySmall
-                )
+                plan.createdAt?.let {
+                    Text(
+                        "Creado: ${it.substring(0, 10)}",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(8.dp))

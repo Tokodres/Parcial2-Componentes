@@ -34,10 +34,15 @@ fun RegisterPaymentScreen(
     val memberPaymentsState by viewModel.memberPaymentsState.collectAsStateWithLifecycle()
     val currentPlan by viewModel.currentPlan.collectAsStateWithLifecycle()
 
-    // Cargar datos al iniciar
-    LaunchedEffect(Unit) {
-        viewModel.loadPaymentsByMember(member._id ?: "")
-        viewModel.loadPlan(planId)
+    // Efecto para cargar datos cuando el miembro o plan cambian
+    LaunchedEffect(member._id, planId) {
+        viewModel.setCurrentMemberAndPlan(member._id ?: "", planId)
+        // Resetear estado local cuando el miembro cambia
+        amount = ""
+        errorMessage = null
+        showSuccess = false
+        showOverpaymentWarning = false
+        pendingPaymentAmount = 0.0
     }
 
     // Calcular total pagado por el miembro
@@ -54,7 +59,6 @@ fun RegisterPaymentScreen(
     val remainingGoal = remember(currentPlan, totalPaidByMember) {
         val goal = currentPlan?.targetAmount ?: 0.0
         val remaining = goal - totalPaidByMember
-        println("🔍 [DEBUG] Meta: $goal, Pagado: $totalPaidByMember, Restante: $remaining")
         remaining
     }
 
