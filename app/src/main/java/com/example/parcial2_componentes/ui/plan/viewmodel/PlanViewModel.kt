@@ -20,15 +20,15 @@ class PlanViewModel(private val repository: FamilySavingsRepository) : ViewModel
     private val _createPlanState = MutableStateFlow<ApiResponse<Plan>?>(null)
     val createPlanState: StateFlow<ApiResponse<Plan>?> = _createPlanState
 
-    // Estado para miembros por plan
+    // Estado para almacenar miembros por plan
     private val _membersByPlan = MutableStateFlow<Map<String, List<Member>>>(emptyMap())
     val membersByPlan: StateFlow<Map<String, List<Member>>> = _membersByPlan
 
-    // ✅ NUEVO: Estado para pagos por plan
+    // Estado para almacenar pagos por plan
     private val _paymentsByPlan = MutableStateFlow<Map<String, List<Payment>>>(emptyMap())
     val paymentsByPlan: StateFlow<Map<String, List<Payment>>> = _paymentsByPlan
 
-    // ✅ NUEVO: Estado para total recaudado por plan
+    // Estado para almacenar total recaudado por plan
     private val _totalCollectedByPlan = MutableStateFlow<Map<String, Double>>(emptyMap())
     val totalCollectedByPlan: StateFlow<Map<String, Double>> = _totalCollectedByPlan
 
@@ -42,51 +42,49 @@ class PlanViewModel(private val repository: FamilySavingsRepository) : ViewModel
             val response = repository.getPlans()
             _plansState.value = response
 
-            // Cargar miembros y pagos para cada plan
+            // Si la respuesta es exitosa, cargar miembros y pagos para cada plan
             if (response is ApiResponse.Success) {
-                loadMembersAndPaymentsForAllPlans(response.data)
+                loadMembersAndPaymentsForPlans(response.data)
             }
         }
     }
 
-    // ✅ MODIFICADO: Cargar tanto miembros como pagos para todos los planes
-    private fun loadMembersAndPaymentsForAllPlans(plans: List<Plan>) {
+    private fun loadMembersAndPaymentsForPlans(plans: List<Plan>) {
         viewModelScope.launch {
-            val membersMap = mutableMapOf<String, List<Member>>()
-            val paymentsMap = mutableMapOf<String, List<Payment>>()
-            val totalCollectedMap = mutableMapOf<String, Double>()
-
             plans.forEach { plan ->
                 plan._id?.let { planId ->
-                    // Cargar miembros
-                    when (val membersResponse = repository.getMembersByPlan(planId)) {
-                        is ApiResponse.Success -> {
-                            membersMap[planId] = membersResponse.data
-                        }
-                        else -> {
-                            membersMap[planId] = emptyList()
+                    // Cargar miembros para este plan
+                    launch {
+                        when (val membersResponse = repository.getMembersByPlan(planId)) {
+                            is ApiResponse.Success -> {
+                                _membersByPlan.value = _membersByPlan.value + (planId to membersResponse.data)
+                            }
+                            else -> {
+                                // En caso de error, usar lista vacía
+                                _membersByPlan.value = _membersByPlan.value + (planId to emptyList())
+                            }
                         }
                     }
 
-                    // ✅ NUEVO: Cargar pagos y calcular total
-                    when (val paymentsResponse = repository.getPaymentsByPlan(planId)) {
-                        is ApiResponse.Success -> {
-                            val payments = paymentsResponse.data
-                            paymentsMap[planId] = payments
-                            // Calcular total recaudado sumando todos los pagos
-                            totalCollectedMap[planId] = payments.sumOf { it.amount }
-                        }
-                        else -> {
-                            paymentsMap[planId] = emptyList()
-                            totalCollectedMap[planId] = 0.0
+                    // Cargar pagos para este plan
+                    launch {
+                        when (val paymentsResponse = repository.getPaymentsByPlan(planId)) {
+                            is ApiResponse.Success -> {
+                                _paymentsByPlan.value = _paymentsByPlan.value + (planId to paymentsResponse.data)
+
+                                // Calcular total recaudado para este plan
+                                val totalCollected = paymentsResponse.data.sumOf { it.amount }
+                                _totalCollectedByPlan.value = _totalCollectedByPlan.value + (planId to totalCollected)
+                            }
+                            else -> {
+                                // En caso de error, usar lista vacía y total 0
+                                _paymentsByPlan.value = _paymentsByPlan.value + (planId to emptyList())
+                                _totalCollectedByPlan.value = _totalCollectedByPlan.value + (planId to 0.0)
+                            }
                         }
                     }
                 }
             }
-
-            _membersByPlan.value = membersMap
-            _paymentsByPlan.value = paymentsMap
-            _totalCollectedByPlan.value = totalCollectedMap
         }
     }
 
@@ -111,5 +109,90 @@ class PlanViewModel(private val repository: FamilySavingsRepository) : ViewModel
 
     fun refreshPlans() {
         loadPlans()
+    }
+
+    // ✅ NUEVA FUNCIÓN: Recargar miembros específicos de un plan
+    fun loadMembersForPlan(planId: String) {
+        viewModelScope.launch {
+            when (val response = repository.getMembersByPlan(planId)) {
+                is ApiResponse.Success -> {
+                    _membersByPlan.value = _membersByPlan.value + (planId to response.data)
+                }
+                else -> {
+                    // En caso de error, mantener el estado actual o limpiar?
+                    // Depende de tu lógica de negocio
+                }
+            }
+        }
+    }
+
+    // ✅ NUEVA FUNCIÓN: Recargar pagos específicos de un plan
+    fun loadPaymentsForPlan(planId: String) {
+        viewModelScope.launch {
+            when (val response = repository.getPaymentsByPlan(planId)) {
+                is ApiResponse.Success -> {
+                    _paymentsByPlan.value = _paymentsByPlan.value + (planId to response.data)
+
+                    // Recalcular total recaudado para este plan
+                    val totalCollected = response.data.sumOf { it.amount }
+                    _totalCollectedByPlan.value = _totalCollectedByPlan.value + (planId to totalCollected)
+                }
+                else -> {
+                    // En caso de error, mantener el estado actual
+                }
+            }
+        }
+    }
+
+    // ✅ NUEVA FUNCIÓN: Recargar todo para un plan específico (miembros y pagos)
+    fun refreshPlanData(planId: String) {
+        viewModelScope.launch {
+            // Cargar miembros
+            launch {
+                when (val membersResponse = repository.getMembersByPlan(planId)) {
+                    is ApiResponse.Success -> {
+                        _membersByPlan.value = _membersByPlan.value + (planId to membersResponse.data)
+                    }
+                    else -> {
+                        // Manejar error si es necesario
+                    }
+                }
+            }
+
+            // Cargar pagos
+            launch {
+                when (val paymentsResponse = repository.getPaymentsByPlan(planId)) {
+                    is ApiResponse.Success -> {
+                        _paymentsByPlan.value = _paymentsByPlan.value + (planId to paymentsResponse.data)
+
+                        // Recalcular total recaudado
+                        val totalCollected = paymentsResponse.data.sumOf { it.amount }
+                        _totalCollectedByPlan.value = _totalCollectedByPlan.value + (planId to totalCollected)
+                    }
+                    else -> {
+                        // Manejar error si es necesario
+                    }
+                }
+            }
+        }
+    }
+
+    // Función para obtener un plan específico por ID
+    fun getPlanById(planId: String): Plan? {
+        return when (val state = _plansState.value) {
+            is ApiResponse.Success -> {
+                state.data.find { it._id == planId }
+            }
+            else -> null
+        }
+    }
+
+    // Función para limpiar todos los estados
+    fun clearAllState() {
+        _plansState.value = ApiResponse.Loading
+        _createPlanState.value = null
+        _membersByPlan.value = emptyMap()
+        _paymentsByPlan.value = emptyMap()
+        _totalCollectedByPlan.value = emptyMap()
     }
 }

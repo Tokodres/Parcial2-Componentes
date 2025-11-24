@@ -71,6 +71,11 @@ fun AppNavigation(planViewModel: PlanViewModel, app: FamilySavingsApp) {
                 createdPlanId = planId
                 createdPlanName = planName
                 currentScreen = "payment_summary"
+            },
+            onAddMoreMembers = { planId, planName -> // ✅ NUEVO: Navegación para agregar más miembros
+                createdPlanId = planId
+                createdPlanName = planName
+                currentScreen = "add_more_members"
             }
         )
         "create_plan" -> CreatePlanScreen(
@@ -96,7 +101,26 @@ fun AppNavigation(planViewModel: PlanViewModel, app: FamilySavingsApp) {
                     planViewModel.refreshPlans() // Recargar planes
                 },
                 onBack = { currentScreen = "plan_list" },
-                viewModel = memberViewModel
+                viewModel = memberViewModel,
+                isAddingMoreMembers = false // ✅ Contexto: creación inicial de plan
+            )
+        }
+        "add_more_members" -> { // ✅ NUEVA PANTALLA: Agregar más miembros a plan existente
+            val planId = createdPlanId ?: ""
+            val planName = createdPlanName ?: "Plan"
+            val memberViewModel: MemberViewModel = viewModel(
+                factory = MemberViewModelFactory(app.repository)
+            )
+            AddMemberScreen(
+                planId = planId,
+                planName = planName,
+                onMembersAdded = {
+                    currentScreen = "plan_list"
+                    planViewModel.refreshPlans() // Recargar planes
+                },
+                onBack = { currentScreen = "plan_list" },
+                viewModel = memberViewModel,
+                isAddingMoreMembers = true // ✅ Contexto: agregar más miembros a plan existente
             )
         }
         "payment_summary" -> {
@@ -105,7 +129,7 @@ fun AppNavigation(planViewModel: PlanViewModel, app: FamilySavingsApp) {
             val paymentViewModel: PaymentViewModel = viewModel(
                 factory = PaymentViewModelFactory(app.repository)
             )
-            PaymentSummaryScreen(  // ✅ ESTA PARTE QUEDA EXACTAMENTE IGUAL
+            PaymentSummaryScreen(
                 planId = planId,
                 planName = planName,
                 onRegisterPayment = { member ->
@@ -115,6 +139,9 @@ fun AppNavigation(planViewModel: PlanViewModel, app: FamilySavingsApp) {
                 onBack = {
                     currentScreen = "plan_list"
                     planViewModel.refreshPlans() // Recargar planes al volver
+                },
+                onAddMoreMembers = { // ✅ NUEVO: Callback para agregar más miembros desde el resumen de pagos
+                    currentScreen = "add_more_members"
                 },
                 viewModel = paymentViewModel
             )
@@ -154,11 +181,12 @@ fun AppNavigation(planViewModel: PlanViewModel, app: FamilySavingsApp) {
 fun PlanListScreen(
     viewModel: PlanViewModel,
     onCreateNewPlan: () -> Unit,
-    onViewPayments: (String, String) -> Unit
+    onViewPayments: (String, String) -> Unit,
+    onAddMoreMembers: (String, String) -> Unit // ✅ NUEVO: Callback para agregar más miembros
 ) {
     val plansState by viewModel.plansState.collectAsStateWithLifecycle()
     val membersByPlan by viewModel.membersByPlan.collectAsStateWithLifecycle()
-    val totalCollectedByPlan by viewModel.totalCollectedByPlan.collectAsStateWithLifecycle() // ✅ NUEVO
+    val totalCollectedByPlan by viewModel.totalCollectedByPlan.collectAsStateWithLifecycle()
 
     // Recargar planes al entrar a la pantalla
     LaunchedEffect(Unit) {
@@ -243,14 +271,17 @@ fun PlanListScreen(
                         items(plans) { plan ->
                             // Obtener miembros para este plan específico
                             val planMembers = plan._id?.let { membersByPlan[it] } ?: emptyList()
-                            // ✅ NUEVO: Obtener total recaudado calculado
+                            // Obtener total recaudado calculado
                             val planTotalCollected = plan._id?.let { totalCollectedByPlan[it] } ?: 0.0
                             PlanItem(
                                 plan = plan,
                                 planMembers = planMembers,
-                                totalCollected = planTotalCollected, // ✅ Pasar el total calculado
+                                totalCollected = planTotalCollected,
                                 onViewPayments = {
                                     onViewPayments(plan._id ?: "", plan.name)
+                                },
+                                onAddMoreMembers = { // ✅ NUEVO: Pasar el callback
+                                    onAddMoreMembers(plan._id ?: "", plan.name)
                                 }
                             )
                         }
@@ -287,11 +318,12 @@ fun PlanListScreen(
 fun PlanItem(
     plan: Plan,
     planMembers: List<Member>,
-    totalCollected: Double, // ✅ NUEVO: Recibir el total calculado
-    onViewPayments: () -> Unit
+    totalCollected: Double,
+    onViewPayments: () -> Unit,
+    onAddMoreMembers: () -> Unit // ✅ NUEVO: Callback para agregar más miembros
 ) {
     // Calcular lo que falta para la meta usando el total calculado
-    val remainingAmount = plan.targetAmount - totalCollected // ✅ Usar totalCollected en lugar de plan.totalCollected
+    val remainingAmount = plan.targetAmount - totalCollected
 
     Card(
         modifier = Modifier
@@ -339,7 +371,7 @@ fun PlanItem(
 
                     // Porcentaje de completado
                     Text(
-                        "${((totalCollected / plan.targetAmount) * 100).toInt()}%", // ✅ Usar totalCollected
+                        "${((totalCollected / plan.targetAmount) * 100).toInt()}%",
                         style = MaterialTheme.typography.headlineSmall,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -363,7 +395,7 @@ fun PlanItem(
                 Column {
                     Text("Recolectado", style = MaterialTheme.typography.bodySmall)
                     Text(
-                        "$${"%.2f".format(totalCollected)}", // ✅ Usar totalCollected calculado
+                        "$${"%.2f".format(totalCollected)}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -379,7 +411,7 @@ fun PlanItem(
 
             // Progress bar - usar el total calculado
             val progress = if (plan.targetAmount > 0) {
-                (totalCollected / plan.targetAmount).toFloat().coerceIn(0f, 1f) // ✅ Usar totalCollected
+                (totalCollected / plan.targetAmount).toFloat().coerceIn(0f, 1f)
             } else {
                 0f
             }
@@ -421,15 +453,30 @@ fun PlanItem(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Botón para registrar pagos
-            Button(
-                onClick = onViewPayments,
+            // ✅ NUEVO: Botones de acción en fila
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                )
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("💳 Registrar Pagos")
+                Button(
+                    onClick = onViewPayments,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Text("💳 Pagos")
+                }
+
+                Button(
+                    onClick = onAddMoreMembers,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondary
+                    )
+                ) {
+                    Text("👥 Agregar Miembros")
+                }
             }
         }
     }

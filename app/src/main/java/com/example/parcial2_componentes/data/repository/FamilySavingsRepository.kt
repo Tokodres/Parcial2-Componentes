@@ -56,23 +56,26 @@ class FamilySavingsRepository(private val apiService: ApiService) {
     suspend fun createMember(member: CreateMemberRequest): ApiResponse<Member> {
         return try {
             println("🟡 [REPOSITORY] Enviando miembro al backend: $member")
+            val startTime = System.currentTimeMillis() // ✅ Medir tiempo
             val response = apiService.createMember(member)
-            println("🟡 [REPOSITORY] Respuesta - Código: ${response.code()}")
+            val endTime = System.currentTimeMillis()
+            println("🟡 [REPOSITORY] Respuesta recibida en ${endTime - startTime}ms - Código: ${response.code()}")
 
             if (response.isSuccessful && response.body() != null) {
                 val createdMember = response.body()!!
-                println("✅ [REPOSITORY] MIEMBRO CREADO EXITOSAMENTE:")
+                println("✅ [REPOSITORY] MIEMBRO CREADO EXITOSAMENTE en ${endTime - startTime}ms:")
                 println("   - ID: ${createdMember._id}")
                 println("   - Nombre: ${createdMember.name}")
                 println("   - Plan ID: ${createdMember.planId}")
                 ApiResponse.Success(createdMember)
             } else {
                 val errorBody = response.errorBody()?.string() ?: "Error sin cuerpo"
-                println("🔴 [REPOSITORY] ERROR: $errorBody")
+                println("🔴 [REPOSITORY] ERROR en ${endTime - startTime}ms: $errorBody")
                 ApiResponse.Error("Error del servidor: $errorBody")
             }
         } catch (e: Exception) {
             println("🔴 [REPOSITORY] EXCEPCIÓN: ${e.message}")
+            e.printStackTrace()
             ApiResponse.Error("Error de conexión: ${e.message}")
         }
     }

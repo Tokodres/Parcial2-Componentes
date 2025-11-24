@@ -22,6 +22,7 @@ fun PaymentSummaryScreen(
     planName: String,
     onRegisterPayment: (Member) -> Unit,
     onBack: () -> Unit,
+    onAddMoreMembers: () -> Unit, // ✅ NUEVO: Callback para agregar más miembros
     viewModel: PaymentViewModel = viewModel()
 ) {
     val membersState by viewModel.membersState.collectAsStateWithLifecycle()
@@ -97,6 +98,12 @@ fun PaymentSummaryScreen(
                         }
                     ) {
                         Text("🔄")
+                    }
+                    // ✅ NUEVO: Botón para agregar más miembros
+                    IconButton(
+                        onClick = onAddMoreMembers
+                    ) {
+                        Text("👥")
                     }
                 }
             )
@@ -239,6 +246,12 @@ fun PaymentSummaryScreen(
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Button(
+                                    onClick = onAddMoreMembers
+                                ) {
+                                    Text("Agregar Miembros")
+                                }
                             }
                         }
                     } else {
